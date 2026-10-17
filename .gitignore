@@ -1,0 +1,27 @@
+# Secretos — NUNCA subir
+.env
+
+# Base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups de PostgreSQL
+backups/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Session state
+config/session.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,4 @@
+﻿pais,producto_o_promocion,moneda,precio,estado,cantidad,envio,plazo,observaciones
+US,ELIM Classic - 1 paca,USD,120,CONFIRMADO POR USUARIO,1 paca,No confirmado para compra individual,No confirmado,Precio vigente informado 2026-10-16
+US,ELIM Classic - promoción 2 pacas,USD,200,CONFIRMADO POR USUARIO,2 pacas,Incluido,3 a 7 días hábiles según destino,Ahorro de USD 40 respecto a dos pacas individuales; vigencia no especificada
+CO,ELIM Classic - promoción 2x1,COP,456000,CONFIRMADO POR USUARIO,2 pacas (1 pagada + 1 gratis),Incluido,Bogotá 1 a 3 días hábiles; otras ciudades y municipios 3 a 7 días hábiles,Vigencia y restricciones no especificadas

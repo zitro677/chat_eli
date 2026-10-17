@@ -1,0 +1,32 @@
+# Configuración del negocio — Generado por AgentKit
+negocio:
+  nombre: "Agua ELIM / ELIM Water"
+  lema: "Grandeza en el agua / Greatness in the Water"
+  descripcion: >
+    Agua premium elaborada con un proceso de tratamiento magnético molecular,
+    propuesta de hidratación consciente. Vende en Colombia y Estados Unidos
+    por la tienda web y por WhatsApp.
+  web: "https://elimred.com"
+  tienda: "https://elimred.com/tienda/"
+  whatsapp: "+1 615 414 2526"
+  horario: "Lunes a viernes 8:00 a. m. – 5:00 p. m. (hora central). Sábados con cita previa por WhatsApp."
+
+agente:
+  nombre: "ELI"
+  tono: "Cálido, dulce y profesional — bilingüe ES/EN"
+  disponibilidad: "24/7"
+  casos_de_uso:
+    - "Responder preguntas frecuentes sobre ELIM e hidratación"
+    - "Calificar y atender leads / ventas"
+    - "Guiar pedidos y pagos (Zelle, Bancolombia, PayPal vía tienda)"
+    - "Transferir a un asesor humano"
+
+integraciones:
+  whatsapp: "ycloud (coexistencia con app WhatsApp Business)"
+  ia: "OpenAI"
+  leads: "Make → Google Sheets (columnas: nombre, telefono, correo, pais, horario)"
+
+metadata:
+  creado: "2026-10-16"
+  version: "1.0"
+  reemplaza: "Chatflow Flowise 'Elim Chatflow' (GPT-4o + Pinecone)"
