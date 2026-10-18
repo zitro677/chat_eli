@@ -1,9 +1,10 @@
 # agent/brain.py — Cerebro del agente ELI: conexión con OpenAI
 # Generado por AgentKit
 #
-# El system prompt = reglas de config/prompts.yaml + archivos de /knowledge.
-# Ese bloque es idéntico en cada llamada, así OpenAI lo cachea automáticamente
-# (los datos que cambian — fecha, teléfono — van en un mensaje aparte al final).
+# El system prompt = reglas de config/prompts.yaml + archivos fijos de /knowledge.
+# Ese bloque es idéntico en cada llamada, así OpenAI lo cachea automáticamente.
+# El resto de /knowledge se consulta con RAG (agent/rag.py): solo los fragmentos
+# relevantes a cada mensaje van, junto con fecha y teléfono, en un mensaje al final.
 
 import os
 import json
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from agent.http import nuevo_cliente
+from agent.rag import IndiceRAG, formatear
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -26,6 +28,9 @@ MAX_ITERACIONES = 5  # límite de llamadas a herramientas por mensaje
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), http_client=nuevo_cliente(timeout=60.0))
 
 _system_prompt_cache: str | None = None
+_indice_rag: IndiceRAG | None = None
+_rag_activo = False  # True cuando el índice se construyó bien
+_rag_inicializado = False
 
 
 # ── Configuración ────────────────────────────────────────────────────────────
@@ -52,13 +57,67 @@ def _cargar_knowledge(archivos: list[str]) -> str:
     return "\n\n".join(bloques)
 
 
+# ── RAG ──────────────────────────────────────────────────────────────────────
+
+async def inicializar_rag() -> bool:
+    """
+    Construye el índice RAG con los archivos de `rag.files` en prompts.yaml.
+    Si falla (o rag.enabled es false), esos archivos van completos en el system prompt.
+    """
+    global _indice_rag, _rag_activo, _rag_inicializado, _system_prompt_cache
+    rag = cargar_config_prompts().get("rag", {}) or {}
+    if not rag.get("enabled") or not rag.get("files"):
+        _rag_activo = False
+    else:
+        if _indice_rag is None:
+            _indice_rag = IndiceRAG(
+                client,
+                rag["files"],
+                top_k=int(rag.get("top_k", 5)),
+                puntaje_minimo=float(rag.get("puntaje_minimo", 0.25)),
+            )
+        try:
+            _rag_activo = await _indice_rag.construir()
+        except Exception as e:
+            logger.error(f"RAG: no se pudo construir el índice ({e}). Se usa la base completa.")
+            _rag_activo = False
+    _rag_inicializado = True
+    _system_prompt_cache = None  # el prompt cambia según si RAG quedó activo
+    return _rag_activo
+
+
+async def _contexto_rag(mensaje: str, historial: list[dict]) -> str:
+    """Fragmentos de /knowledge relevantes al mensaje (incluye el turno anterior del cliente)."""
+    if not _rag_activo or _indice_rag is None:
+        return ""
+    # El mensaje previo del cliente da contexto a seguimientos cortos ("¿y para la diabetes?")
+    previos = [m["content"] for m in historial if m["role"] == "user"][-1:]
+    consulta = "\n".join(previos + [mensaje])
+    try:
+        fragmentos = await _indice_rag.buscar(consulta)
+        texto = formatear(fragmentos)
+    except Exception as e:
+        logger.warning(f"RAG: búsqueda falló ({e}). Se envía la base completa en este mensaje.")
+        texto = _indice_rag.texto_completo()
+    if not texto:
+        return ""
+    return (
+        "Información de la base de conocimiento relevante para este mensaje "
+        "(úsala como guía según las reglas; si no cubre la pregunta, no inventes):\n\n" + texto
+    )
+
+
 def cargar_system_prompt() -> str:
-    """System prompt completo (reglas + base de conocimiento). Se cachea en memoria."""
+    """System prompt (reglas + archivos fijos de conocimiento). Se cachea en memoria."""
     global _system_prompt_cache
     if _system_prompt_cache is None:
         config = cargar_config_prompts()
         reglas = config.get("system_prompt", "Eres ELI, asistente de Agua ELIM.")
-        knowledge = _cargar_knowledge(config.get("knowledge_files", []))
+        archivos = list(config.get("knowledge_files", []))
+        if not _rag_activo:
+            # Sin RAG, los archivos del índice van completos (comportamiento original)
+            archivos += (config.get("rag", {}) or {}).get("files", [])
+        knowledge = _cargar_knowledge(archivos)
         _system_prompt_cache = f"{reglas}\n\n# BASE DE CONOCIMIENTO\n\n{knowledge}" if knowledge else reglas
         logger.info(f"System prompt cargado ({len(_system_prompt_cache):,} caracteres)")
     return _system_prompt_cache
@@ -104,9 +163,16 @@ async def generar_respuesta(
 
     from agent.tools import TOOLS_DEFINITION, ejecutar_herramienta
 
+    if not _rag_inicializado:
+        await inicializar_rag()
+
     mensajes = [{"role": "system", "content": cargar_system_prompt()}]
     mensajes += [{"role": m["role"], "content": m["content"]} for m in historial]
-    mensajes.append({"role": "system", "content": _contexto_dinamico(telefono, nombre_perfil)})
+    dinamico = _contexto_dinamico(telefono, nombre_perfil)
+    contexto_rag = await _contexto_rag(mensaje, historial)
+    if contexto_rag:
+        dinamico += "\n\n" + contexto_rag
+    mensajes.append({"role": "system", "content": dinamico})
     mensajes.append({"role": "user", "content": mensaje})
 
     contexto = {"telefono": telefono, "nombre_perfil": nombre_perfil}

@@ -118,25 +118,37 @@ system_prompt: |
   ## Reglas generales
   - Si no sabes algo, dilo: "No tengo esa información, pero puedo conectarte con alguien de nuestro equipo." y ofrece transferir.
   - No menciones notas internas de la base de conocimiento (estados "pendiente", "verificar", versiones, fuentes).
-  - La base de conocimiento de abajo contiene fichas y respuestas modelo: úsalas como guía, adáptalas a la
-    conversación y no las copies todas. Si algo de la base contradice estas reglas, mandan estas reglas.
+  - La base de conocimiento (la de abajo y los fragmentos relevantes que llegan con cada mensaje) contiene
+    fichas y respuestas modelo: úsalas como guía, adáptalas a la conversación y no las copies todas.
+    Si la pregunta coincide con una de las 34 respuestas de referencia, usa esa respuesta como modelo principal,
+    con su misma estructura: saludo → qué pasa en el cuerpo → cómo ayuda beber agua → cierre de hidratación consciente.
+    Si algo de la base contradice estas reglas, mandan estas reglas.
 
-# Archivos de /knowledge que se agregan al system prompt (en este orden)
+# Archivos de /knowledge que van SIEMPRE completos en el system prompt (cortos y críticos)
 knowledge_files:
-  - es/RESPUESTAS_34_PREGUNTAS_FRECUENTES.md   # fuente: knowledge/AGUA_ELIM_34_respuestas.pdf
   - es/GUIA_DE_CONVERSACION.md
-  - es/FICHAS_ESPECIFICAS_HIDRATACION_v4.md
-  - es/SALUD_E_HIDRATACION.md
-  - es/SALUD_REPRODUCTIVA_Y_ETAPAS.md
-  - es/IDENTIDAD_Y_TECNOLOGIA.md
-  - es/RESPUESTAS_COMERCIALES_ACTUALIZADAS.md
   - es/FLUJO_DE_VENTAS.md
   - es/CATALOGO_Y_PROMOCIONES.csv
-  - es/PAGOS_Y_CONFIRMACION_v5.md
-  - es/PAGOS_ZELLE_ESTADOS_UNIDOS_v7.md
-  - es/REDES_WEB_Y_TESTIMONIOS.md
-  - en/CONVERSATION_PLAYBOOK.md
-  - en/READY_TO_SEND_REPLIES.md
+
+# RAG ligero: estos archivos se dividen en fragmentos y en cada mensaje se envían
+# solo los más relevantes. Con enabled: false (o si falla OpenAI embeddings)
+# se agregan completos al system prompt, como antes.
+rag:
+  enabled: true
+  top_k: 5              # fragmentos por mensaje
+  puntaje_minimo: 0.25  # similitud mínima (0-1) para incluir un fragmento
+  files:
+    - es/RESPUESTAS_34_PREGUNTAS_FRECUENTES.md   # fuente: knowledge/AGUA_ELIM_34_respuestas.pdf
+    - es/FICHAS_ESPECIFICAS_HIDRATACION_v4.md
+    - es/SALUD_E_HIDRATACION.md
+    - es/SALUD_REPRODUCTIVA_Y_ETAPAS.md
+    - es/IDENTIDAD_Y_TECNOLOGIA.md
+    - es/RESPUESTAS_COMERCIALES_ACTUALIZADAS.md
+    - es/PAGOS_Y_CONFIRMACION_v5.md
+    - es/PAGOS_ZELLE_ESTADOS_UNIDOS_v7.md
+    - es/REDES_WEB_Y_TESTIMONIOS.md
+    - en/CONVERSATION_PLAYBOOK.md
+    - en/READY_TO_SEND_REPLIES.md
 
 fallback_message: "Disculpa, no entendí tu mensaje. ¿Podrías escribirlo de otra forma? 💧"
 error_message: "Lo siento, estoy teniendo un problema técnico. Por favor escríbenos de nuevo en unos minutos. 💙"

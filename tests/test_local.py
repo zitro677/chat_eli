@@ -11,7 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agent.brain import generar_respuesta
+from agent.brain import generar_respuesta, inicializar_rag
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial, bot_pausado, reanudar_bot,
 )
@@ -21,6 +21,7 @@ TELEFONO_TEST = "+10000000000"
 
 async def main():
     await inicializar_db()
+    await inicializar_rag()
 
     print()
     print("=" * 55)

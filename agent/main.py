@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
-from agent.brain import generar_respuesta
+from agent.brain import generar_respuesta, inicializar_rag
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial,
     marcar_procesado, bot_pausado, pausar_bot,
@@ -38,6 +38,7 @@ _candados: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await inicializar_db()
+    await inicializar_rag()
     logger.info(f"ELI iniciado | Puerto {PORT} | Proveedor {proveedor.__class__.__name__}")
     yield
 
