@@ -4,16 +4,15 @@
 # Las dos herramientas envían eventos al escenario de Make (MAKE_WEBHOOK_URL):
 #   evento="lead"          → Make agrega una fila a la Google Sheet de leads
 #   evento="transferencia" → Make avisa al equipo que un cliente necesita a una persona
+#
+# Transferir NO pausa el bot: ELI sigue respondiendo mientras el equipo contacta al cliente.
 
 import os
 import logging
 from datetime import datetime, timezone
 from agent.http import nuevo_cliente
-from agent.memory import pausar_bot
 
 logger = logging.getLogger("agentkit")
-
-HANDOFF_PAUSE_HOURS = float(os.getenv("HANDOFF_PAUSE_HOURS", "8"))
 
 
 # ── Definición de herramientas para OpenAI (function calling) ────────────────
@@ -34,7 +33,7 @@ TOOLS_DEFINITION = [
                     "nombre": {"type": "string", "description": "Nombre del cliente"},
                     "correo": {"type": "string", "description": "Correo electrónico (opcional, vacío si no lo dio)"},
                     "pais": {"type": "string", "description": "Colombia o Estados Unidos (u otro país que indique)"},
-                    "horario": {"type": "string", "description": "Horario preferido para que lo contacten (vacío si no lo dio)"},
+                    "horario": {"type": "string", "description": "Horario preferido de contacto, o día y hora deseados si pidió una cita (vacío si no lo dio)"},
                 },
                 "required": ["nombre", "pais"],
             },
@@ -45,17 +44,18 @@ TOOLS_DEFINITION = [
         "function": {
             "name": "transferir_a_humano",
             "description": (
-                "Avisa al equipo de ELIM para que una persona continúe la conversación y pausa el bot "
-                "para este cliente. Úsala cuando: el cliente pide hablar con una persona; envía un "
-                "comprobante de pago; quiere pagar por PayPal y necesita ayuda; hay un reclamo, un "
-                "pedido por confirmar, o una situación de salud delicada (diálisis, síntomas graves)."
+                "Avisa al equipo de ELIM para que una persona contacte al cliente. Úsala cuando: el cliente "
+                "pide una cita o hablar con una persona; envía un comprobante de pago; quiere pagar por PayPal "
+                "y necesita ayuda; hay un reclamo, un pedido por confirmar, o una situación de salud delicada. "
+                "ANTES de llamarla (salvo comprobante de pago o seguridad), pide los datos y llama a "
+                "registrar_lead: el equipo necesita saber a quién contactar."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "motivo": {
                         "type": "string",
-                        "enum": ["pide_humano", "comprobante_pago", "pedido", "reclamo", "salud_delicada", "otro"],
+                        "enum": ["cita", "pide_humano", "comprobante_pago", "pedido", "reclamo", "salud_delicada", "otro"],
                     },
                     "resumen": {
                         "type": "string",
@@ -114,8 +114,7 @@ async def transferir_a_humano(telefono: str, motivo: str, resumen: str, nombre_p
         "resumen": resumen,
         "fecha": _fecha(),
     })
-    await pausar_bot(telefono, HANDOFF_PAUSE_HOURS, motivo)
-    return {"ok": ok, "mensaje": "Equipo notificado; despídete indicando que una persona continuará por este chat"}
+    return {"ok": ok, "mensaje": "Equipo notificado; dile al cliente que una persona lo contactará pronto y que puedes seguir ayudándole mientras tanto"}
 
 
 # ── Despachador ──────────────────────────────────────────────────────────────
