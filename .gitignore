@@ -1,5 +1,7 @@
 # Secretos — NUNCA subir
 .env
+env.txt
+env.zip
 
 # Base de datos local
 *.db
