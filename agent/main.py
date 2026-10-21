@@ -10,7 +10,8 @@ import logging
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, FileResponse
+from fastapi import HTTPException
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta, inicializar_rag
@@ -20,6 +21,7 @@ from agent.memory import (
 )
 from agent.providers import obtener_proveedor
 from agent.providers.base import MensajeEntrante
+from agent import voice
 
 load_dotenv()
 
@@ -50,6 +52,15 @@ app = FastAPI(title="ELI — Agente WhatsApp de Agua ELIM", version="1.0.0", lif
 async def health_check():
     """Endpoint de salud para monitoreo."""
     return {"status": "ok", "service": "eli-agent"}
+
+
+@app.get("/media/{nombre}")
+async def media(nombre: str):
+    """Sirve las notas de voz generadas para que YCloud las descargue."""
+    ruta = voice.ruta_media(nombre)
+    if not ruta:
+        raise HTTPException(status_code=404)
+    return FileResponse(ruta, media_type="audio/ogg")
 
 
 @app.get("/webhook")
@@ -87,6 +98,16 @@ async def _procesar_mensaje(msg: MensajeEntrante):
                 logger.info(f"Asesor atendiendo a {msg.telefono} — bot pausado {HANDOFF_PAUSE_HOURS}h")
                 return
 
+            # Nota de voz → texto (antes de la pausa, para que el asesor también tenga el contexto)
+            es_voz = msg.tipo == "audio" and bool(msg.media_url)
+            if es_voz:
+                audio = await proveedor.descargar_media(msg.media_url)
+                transcripcion = await voice.transcribir(audio, msg.media_mime or "audio/ogg") if audio else ""
+                if transcripcion:
+                    msg.texto = f"[Nota de voz] {transcripcion}"
+                else:
+                    es_voz = False  # sin transcripción ELI pide que lo escriba; responde en texto
+
             logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
 
             if await bot_pausado(msg.telefono):
@@ -102,8 +123,21 @@ async def _procesar_mensaje(msg: MensajeEntrante):
 
             await guardar_mensaje(msg.telefono, "user", msg.texto)
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
-            await proveedor.enviar_mensaje(msg.telefono, respuesta)
+            await _responder(msg.telefono, respuesta, en_voz=es_voz)
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
     except Exception as e:
         logger.exception(f"Error procesando mensaje de {msg.telefono}: {e}")
+
+
+async def _responder(telefono: str, respuesta: str, en_voz: bool):
+    """Si el cliente habló, ELI contesta con nota de voz; si algo falla, cae a texto.
+    Los enlaces (pagos, catálogo) no se pueden leer en voz alta, así que también van por texto."""
+    if en_voz and voice.voz_habilitada():
+        audio = await voice.sintetizar(respuesta)
+        if audio and await proveedor.enviar_audio(telefono, voice.guardar_audio(audio)):
+            if voice.tiene_enlace(respuesta):
+                await proveedor.enviar_mensaje(telefono, respuesta)
+            return
+        logger.warning(f"No se pudo responder con voz a {telefono} — se envía texto")
+    await proveedor.enviar_mensaje(telefono, respuesta)

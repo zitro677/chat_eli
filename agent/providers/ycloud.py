@@ -86,6 +86,7 @@ class ProveedorYCloud(ProveedorWhatsApp):
                     texto += f' con el texto: "{caption}"'
             if not texto:
                 return []
+            audio = (msg.get("audio") or {}) if tipo == "audio" else {}
             return [MensajeEntrante(
                 telefono=msg.get("from", ""),
                 texto=texto,
@@ -93,6 +94,8 @@ class ProveedorYCloud(ProveedorWhatsApp):
                 es_propio=False,
                 tipo=tipo or "otro",
                 nombre=(msg.get("customerProfile") or {}).get("name", ""),
+                media_url=audio.get("link", ""),
+                media_mime=audio.get("mime_type", ""),
             )]
 
         # Mensaje escrito por el equipo desde la app WhatsApp Business (coexistencia)
@@ -111,20 +114,35 @@ class ProveedorYCloud(ProveedorWhatsApp):
         # Otros eventos (estados de entrega, historial, etc.) no requieren acción
         return []
 
+    async def descargar_media(self, url: str) -> bytes | None:
+        """Descarga la nota de voz del cliente (el enlace de YCloud requiere X-API-Key)."""
+        try:
+            async with nuevo_cliente(timeout=30.0) as client:
+                r = await client.get(url, headers={"X-API-Key": self.api_key or ""}, follow_redirects=True)
+                if r.status_code != 200:
+                    logger.error(f"Error descargando audio YCloud: {r.status_code} — {r.text[:200]}")
+                    return None
+                return r.content
+        except Exception as e:
+            logger.error(f"Excepción al descargar audio YCloud: {e}")
+            return None
+
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
         """Envía mensaje via YCloud (endpoint síncrono sendDirectly)."""
+        return await self._enviar(telefono, {"type": "text", "text": {"body": mensaje}})
+
+    async def enviar_audio(self, telefono: str, url_audio: str) -> bool:
+        """Envía una nota de voz; YCloud la descarga desde url_audio."""
+        return await self._enviar(telefono, {"type": "audio", "audio": {"link": url_audio}})
+
+    async def _enviar(self, telefono: str, contenido: dict) -> bool:
         if not self.api_key or not self.phone_number:
             logger.warning("YCLOUD_API_KEY o YCLOUD_PHONE_NUMBER no configurados — mensaje no enviado")
             return False
 
         url = f"{YCLOUD_API_BASE}/whatsapp/messages/sendDirectly"
         headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
-        payload = {
-            "from": self.phone_number,
-            "to": telefono,
-            "type": "text",
-            "text": {"body": mensaje},
-        }
+        payload = {"from": self.phone_number, "to": telefono, **contenido}
 
         try:
             async with nuevo_cliente(timeout=15.0) as client:

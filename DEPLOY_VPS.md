@@ -68,6 +68,7 @@ nano /opt/elim-agent/.env
 
 - `POSTGRES_PASSWORD=` → una contraseña larga y fuerte.
 - `PORT=8000` → verifica antes que esté libre: `ss -ltnp | grep :8000`. Si está ocupado usa otro (ej. `8010`) y usa el mismo en la configuración de Nginx.
+- `PUBLIC_BASE_URL=https://eli.tudominio.com` → necesario para responder notas de voz con audio (YCloud descarga el audio de esa URL). Si queda vacío, ELI entiende los audios pero responde en texto.
 - `DATABASE_URL` y `ENVIRONMENT` los sobrescribe `docker-compose.yml`; no hace falta cambiarlos.
 
 ## 5. Levantar los contenedores
